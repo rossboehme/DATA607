@@ -1,0 +1,104 @@
+---
+title: "DATA607-Assignment1-RossBoehme"
+author: "Ross Boehme"
+date: "2023-01-29"
+output: html_document
+---
+
+<!-- OVERVIEW -->
+Selected data set: "Daily-Show-Guests" from FiveThirtyEight's GitHub: https://github.com/fivethirtyeight/data/tree/master/daily-show-guests
+
+This data comes from the FiveThirtyEight article "Every Guest Jon Stewart Ever Had on 'The Daily Show.'" Article summary: The Daily Show aired its last new episode hosted by Jon Stewart on August 6th, 2015, and FiveThirtyEight did a retrospective, analyzing who served as a guest during his hosting tenure (1/11/99 to 8/6/15). These data are important because Stewart's show was popular, and who he chose to highlight could have had a major impact on culture and politics.
+
+<!-- READING DATA -->
+Data set is in CSV format. Reading into my R Markdown document via URL with name "daily."
+
+```{r}
+daily <- read.csv('https://raw.githubusercontent.com/fivethirtyeight/data/master/daily-show-guests/daily_show_guests.csv',sep=',',encoding='utf-8')
+```
+
+Data set includes "README.MD" file of metadata, for help defining columns
+
+```{r}
+readLines(con="https://raw.githubusercontent.com/fivethirtyeight/data/master/daily-show-guests/README.md")
+```
+<!-- COLUMN RENAMING TO ENHANCE TABLE's EASE OF USE -->
+
+First, I'll rename the GoogleKnowledge_Occupation column to something shorter; Rename the Show and Group columns to something more intuitive; De-capitalize the YEAR column. This will make exploratory data analysis easier. 
+
+```{r}
+colnames(daily)[colnames(daily) == "GoogleKnowlege_Occupation"] ="Occupation"
+colnames(daily)[colnames(daily) == "Show"] ="AirDate"
+colnames(daily)[colnames(daily) == "Group"] ="OccupationType"
+colnames(daily)[colnames(daily) == "YEAR"] ="Year"
+```
+
+<!-- VIEWING AND SUMMARIZING TABLE TO PLAN DATA APPROACH -->
+
+Now we'll run R commands to develop an understanding of the data shape/format before performing any further analysis/changes.
+
+The summary function shows the dimensions of the df (2693,5), shows the data types of each column, and shows the length of each column, noting that all columns appear to be the same length. 
+```{r}
+summary(daily)
+```
+
+The head function gives an example of what the values look like. The values align with what we'd expect based on the column names.
+```{r}
+head(daily)
+```
+
+<!-- COLUMN SELECTION -->
+
+Per the above, this dataframe has 2693 rows, 5 columns. My first goal is to remove as many of the columns as possible, because the assignment instructions request that the final product has a "subset" of the original dataframe. There are two pairs of columns with somewhat duplicative information: 1) Year and AirDate, 2) Occupation and OccupationType. While Year's information is technically inside AirDate, because AirDate has so many unique values (one date for every show), I believe keeping Year is prudent as it's a way to group dates into easier-to-understand graphs.
+
+"Occupation" can be removed since it's overly-detailed. As the below R code shows, there are 399 unique values in this column, with values that could be more easily understood, charted, and analyzed in larger groupings, such as "Singer," "Vocalist, and "singer-songwriter"being grouped under "Musician." The OccupationType already provides these groupings.
+
+```{r}
+length(unique(daily$Occupation)) #Number of unique Occupation values: 399
+```
+
+```{r}
+head(unique(daily$Occupation),50) #Sample of the overly-detailed occupation values
+```
+
+Dropping Occupation column
+
+```{r}
+daily = subset(daily, select = -c(Occupation))
+```
+
+daily df now only has 4 columns instead of 5.
+
+```{r}
+ncol(daily)
+```
+
+<!-- Exploratory Data Analysis -->
+
+How many AirDates are duplicative and therefore had multiple guests? 
+
+```{r}
+library(tidyverse) #Need to load tidyverse to use duplicated function
+length(daily$AirDate[duplicated(daily$AirDate) == TRUE]) 
+```
+What AirDates had multiple guests?
+
+```{r}
+daily$AirDate[duplicated(daily$AirDate) == TRUE]
+```
+
+Graphing how many guests appeared per year. 
+```{r}
+library(ggplot2)
+ggplot(data=daily, aes(x=Year)) +
+  geom_bar()
+```
+
+Which 10 guests appeared the greatest number of times on The Daily Show during Stewart's tenure?
+```{r}
+sort(table(daily$Raw_Guest_List),decreasing=TRUE)[1:10]
+```
+<!-- Conclusions -->
+The Daily Show had an eclectic array of guests (2693 total with 399 unique occupations), with a roughly consistent 150 guests per year from 1999 to 2014 (2015 had fewer guests as the show ended that year). Fareed Zakaria was the most frequent guest, making 19 appearances, followed by Denis Leary (17), and Brian Williams (16).
+
+The FiveThirtyEight article which covered this data only looked at how the Occupation Type of the guests changed over time, however I'd also be interested to see how the ethnicity and gender of guests changed over time. We tend to talk to people who are most like ourselves. Did Jon Stewart make an effort to share the perspectives of those with a different background than him? If the "Most Frequent Guest" list, excerpted above, is indicative, the answer is "Not so much."
