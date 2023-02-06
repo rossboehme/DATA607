@@ -1,0 +1,94 @@
+---
+title: "DATA607-assignment2"
+author: "Ross Boehme"
+date: "2023-02-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<!-- Data Collection -->
+I surveyed five people about movies over the course of a weekend: My girlfriend, her roommate, both my parents, and myself. I placed related data inside of three tables of a MySQL database named "survey." The three tables were: 1. "responses" which showed each movie and how a given respondent rated it; 2. "respondents" which gave demographic information on survey respondents by ID (linked to "responses" table by "respondent_id" field). 3; "movie_info" table which provided the genre and movie name, with a "movie_id" key field corresponding to movie_id in the "responses" table.
+
+The SQL files used to generate these three tables are included in the Github link here: https://github.com/rossboehme/DATA607/tree/main/assignment2
+
+<!-- Connecting SQL to RStudio -->
+I then installed the RStudio packages required to connect to my local MySQL database. 
+```{r}
+install.packages("RMySQL")
+
+library(RMySQL)
+```
+Creating a connection to that "survey" database via RStudio package "RMySQL"
+
+```{r}
+mysqlconnection = dbConnect(RMySQL::MySQL(),
+                            dbname='survey',
+                            host='localhost',
+                            port=3306,
+                            user='root',
+                            password='Felix5125!')
+```
+
+<!-- Test of Pulling Data -->
+Testing to see if I can return information for each of the three tables. 
+
+```{sql connection=mysqlconnection}
+SELECT * from survey.responses LIMIT 3
+```
+
+```{sql connection=mysqlconnection}
+SELECT * from survey.respondents LIMIT 3
+```
+
+```{sql connection=mysqlconnection}
+SELECT * from survey.movie_info LIMIT 3
+```
+
+Testing to see row count of the three tables. I confirmed my expected count(*) return of a) 30 from "responses" table (6 movies w/ 5 ratings each); b) 6 from "respondents" table (6 respondents); c) 6 from "movie_info" table (6 movies).
+
+```{sql connection=mysqlconnection}
+SELECT count(*) from responses
+```
+```{sql connection=mysqlconnection}
+SELECT count(*) from respondents
+```
+
+```{sql connection=mysqlconnection}
+SELECT COUNT(*) from movie_info
+```
+
+Demonstrating the connected nature of these tables by creating a joined table with at least one field from each. This showed that they're inside of a single database ("survey") and can be joined with the JOIN keyword.
+
+```{sql connection=mysqlconnection}
+SELECT 
+rs.movie_name
+,rs.rating
+,rd.respondent_gender
+,mi.movie_genre
+from survey.responses rs LEFT JOIN survey.respondents rd on rs.respondent_id = rd.respondent_id LEFT JOIN movie_info mi on rs.movie_id = mi.movie_id
+```
+
+<!-- Addressing Questions From Assignment 2 Worksheet -->
+
+Missing data exists in the "responses" table. I addressed it by entering NULL for these values into the SQL query which created the table. Here I return rows where there's a NULL value for "rating" column.
+
+```{sql connection=mysqlconnection}
+SELECT * from responses where rating IS NULL
+```
+
+There were 8 instances where a respondent didn't rate a movie.
+```{sql connection=mysqlconnection}
+SELECT count(*) from responses where rating IS NULL
+```
+
+Since I have a table ("respondents") which shows some demographic information of my survey takers, I can show the relationship between my movie viewing friends and the movies being rated, as is asked on the assignment sheet. 
+
+Below I returned at the average rating for all combined movies by gender. The average was useful because it controlled for, and ignored, NULL values. Per the below SQL block's output, the average Female movie rating (3.5) was higher than the average Male rating (3.2)
+
+```{sql connection=mysqlconnection}
+SELECT rd.respondent_gender, round(avg(rating),1) from responses rs LEFT JOIN respondents rd on rs.respondent_id = rd.respondent_id GROUP BY 1
+```
+I used a standardized rating system for my surveys, asking respondents to rate each movie 1-5. By having a standardized system (ie, on the same scale), it enabled me to perform data analyses where I could compare results between individual survey takers, and also aggregate them by fields such as gender (as above).
