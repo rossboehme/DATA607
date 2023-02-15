@@ -1,0 +1,115 @@
+---
+  title: "Extra Credit - Windows Functions"
+author: "Ross Boehme"
+date: "2023-02-13"
+output: html_document
+---
+  
+<!-- Windows Functions Extra Credit -->
+  
+<!-- 1. Find a dataset that includes time series for two or more separate items.  For example, you could use end of day stock or cryptocurrency prices since Jan 1, 2022 for several instruments. -->
+  
+Reading in Citi Bike data. These data contain every Citi Bike trip taken in January 2023. 
+
+```{r}
+url <- "https://s3.amazonaws.com/tripdata/JC-202301-citibike-tripdata.csv.zip"
+download.file(url,"202301-citibike-tripdata.csv.zip")
+unzip("202301-citibike-tripdata.csv.zip")
+bikes <- read.csv("202301-citibike-tripdata.csv")
+```
+```{r}
+ncol(bikes)
+column_names <- names(bikes)
+```
+These data currently includes 13 columns:
+1) "ride_id" - unique identifier for each ride
+2) "rideable_type" - values of "docked", "elecric", or "classic". docked bikes = trips where the bike didn't move (accidental unlocks). 
+3) "started_at" - date and time of the start of the trip (d/m/yy hr:min)
+4) "ended_at" - date and time of the end of the trip (d/m/yy hr:min)
+5) "start_station_name" - Street name/s of location of start station
+6) "start_station_id" - ID of the station where the bike was taken
+7) "end_station_name" - Street name/s of location of end station
+8) "end_station_id" - ID of the station where the bike was returned
+9) "start_lat" - latitude of start station
+10) "start_lng" - longitude of start station
+11) "end_lat" - latitude of start station
+12) "end_lng" - longitude of start station
+13) "member_casual" - annual membership citi bike subscriber ("member") or anyone else "casual"
+
+I don't need all these columns. I will remove everything but columns I will use in my analysis: rideable_type (bike types), started_at and ended_at (my time series data), as well as member_casual (rider type).
+
+```{r}
+bikes <- bikes[,c('rideable_type','member_casual','started_at','ended_at')]
+```
+
+Also I'll remove rows with a 'rideable_type' value of docked_bike since those are accidental unlocks where trip times aren't representative of actual trips.
+
+```{r}
+bikes <- bikes[bikes$rideable_type != 'docked_bike',]
+```
+
+Finally, before I perform my analysis, I'll load packages which I'll use for calculating my rolling averages and data manipulation. In addition, I'll and add a column "duration" which calculates the difference between the start_time and end_time for each trip.
+
+```{r}
+library(dplyr) #used to execute windows functions
+library(zoo) #used to execute windows functions
+library(lubridate) #used to format trip duration below
+library(hms) #used to calculate trip duration below
+library(purrr) #used to calculate rolling YTD average
+```
+```{r}
+bikes <- mutate(bikes , trip_duration=as_hms(difftime(ended_at,started_at)))
+```
+
+<!-- 2. Use window functions (in SQL or dplyr) to calculate the year-to-date average and the six-day moving averages for each item. -->
+  
+In order to calculate daily moving averages, I need to group my data by trip start time. First I create my start_date column.
+
+```{r}
+bikes$start_date <- as.Date(bikes$started_at)
+```
+
+Currently, my data is organized with each observation (row) being an individual bike trip. To calculate my rolling averages, I'll instead aggregate my numeric series "trip_duration" by my 3 qualitative series rideable_type, member_casual, and my timeseries data start_date.
+
+```{r}
+bikes <- bikes %>% 
+  group_by(start_date,rideable_type,member_casual) %>%
+  summarise(trip_duration=sum(trip_duration))
+```
+For my YTD rolling average, I need to have a Year column, and the trip_duration column needs to temporarily be a data type of numeric. 
+    
+```{r}
+bikes$start_year <- year(bikes$start_date)
+bikes$trip_duration <- as.numeric(bikes$trip_duration)
+```
+
+Now I'll calculate YTD rolling average
+```{r}
+cumavg <- function(x) cumsum(x) / seq_along(x)
+bikes <- transform(bikes, duration_ytdavg = ave(trip_duration, start_year, FUN = cumavg))
+```
+
+Then calculate 3 and 6 day rolling averages using rollmean from zoo. 
+```{r}
+bikes <- bikes %>%
+    group_by(rideable_type,member_casual) %>% 
+    mutate(duration_3dayavg = rollmean(trip_duration, k = 3, fill = NA),
+            duration_6dayavg = rollmean(trip_duration, k = 6, fill = NA)) %>% 
+    ungroup()
+```
+
+Changing to period data types for readability
+```{r}
+bikes <- bikes %>%
+  mutate(trip_duration = seconds_to_period(trip_duration)) %>%
+  mutate(duration_3dayavg = seconds_to_period(duration_3dayavg)) %>%
+  mutate(duration_6dayavg = seconds_to_period(duration_6dayavg)) %>%
+  mutate(duration_ytdavg = seconds_to_period(duration_ytdavg))
+```
+
+```{r}
+write.csv(bikes,"C:\\Users\\rossboehme\\Desktop\\DATA607\\bikes-rolled.csv",row.names=FALSE)
+```
+
+3. Present your code in a three to five minute presentation  (or you may make a recording using screen-castomatic or another tool).
+
