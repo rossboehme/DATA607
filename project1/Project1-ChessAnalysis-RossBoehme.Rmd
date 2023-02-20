@@ -1,0 +1,147 @@
+---
+title: "Project1-ChessDataAnalysis"
+author: "Ross Boehme"
+date: "2023-02-18"
+output: html_document
+---
+
+## **DATA 607 Project 1**
+
+Take chess tournament results text file, and create an R Markdown document which generates a structured CSV file. Output CSV should follow the format: 
+1. Player’s Name
+2. Player’s State
+3. Total Number of Points
+4. Player’s Pre-Rating
+5. Average Pre Chess Rating of Opponents
+
+For example, the first player would be
+Gary Hua, ON, 6.0, 1794, 1605
+
+
+#### Loading Packages
+
+```{r}
+library(tidyverse)
+```
+
+#### Text Import
+
+Because I can't import the text from Blackboard (due to it being behind a login wall), I uploaded the text file to my own Github, where I'll read it from.
+
+Reading the file is somewhat difficult because it has an unconventional structure. The simplest solution I could find was using readLines. 
+
+```{r}
+chess <- readLines("https://raw.githubusercontent.com/rossboehme/DATA607/main/project1/data607-project1-chess.txt")
+```
+
+
+### **Scraping File With Regex**
+
+My approach is to first remove unnecessary info and split the df into three groups based on the information a given line provided. This should make my regex easier. 
+
+#### Removing Unnecessary Info; Preparing Data for Scraping
+
+```{r}
+#Remove first four rows
+chess <- chess[-c(0:4)]
+```
+
+```{r}
+#Splitting dataframe into three groups based on rows
+
+#Rows 1, 4, 7, etc. contain Pair Number, Player Name, Total Points, Opponent info, 
+#Aliasing "PairNamePointsOpp"
+PairNamePointsOpp <- chess[seq(1, length(chess),3)]
+
+#Rows 2, 5, 8, etc. contain Player State, Pre Rating. 
+#Aliasing "StateRating"
+StateRating <- chess[seq(2, length(chess),3)]
+
+#Rows 3, 6, 9, etc. can be removed. Don't need to be saved.
+```
+
+#### Scraping Pair Number, Player's Name, Total Points, and Opponent Info
+```{r}
+#Note: I put my regexes on lines by themselves so I can visualize them easier
+
+pair_num <- as.integer(unlist(str_extract_all(PairNamePointsOpp,
+                                              "(?<=\\s{3,4})\\d{1,2}(?=\\s)"
+                                              )))
+
+name <- unlist(trimws(str_extract(PairNamePointsOpp,
+                           "([[A-Z]]+\\s){2,3}"
+                           )))
+
+points <- as.numeric(unlist(str_extract(PairNamePointsOpp,
+                             "\\d+\\.\\d+"
+                             )))
+
+opponents <- as.integer(unlist(str_extract_all(str_extract_all(PairNamePointsOpp,
+                                                               "[[0-9]]+\\|"),"[[0-9]]+"
+                                               )))
+```
+#### Scraping Player's State, Pre Rating
+```{r}
+state <- str_extract(StateRating, 
+                     "[[A-Z]]+"
+                     )
+
+# I'll pull two versions of the "pre ratings": 
+# 1) The full version includes the alphabetical characters e.g. "EZEKIEL HOUGHTON": 1641P17. I'll call this simply "pre-rating" 
+# 2) However, since I need to average players opponents' Pre Ratings for my final product, I'll pull another adjusted ("adj") version which is only the numeric characters, and use that for my calculations
+pre_rating <- unlist(trimws(str_extract(StateRating, 
+                                                 "(?<=>)(\\s)?[0-9A-Z]{3,7}"
+                                     )))
+
+pre_rating_adj <- as.integer(unlist(trimws(str_extract(StateRating, 
+                                                 "(?<=>)(\\s)?[0-9]{3,4}"
+                                     ))))
+
+```
+
+#### Putting Scraped Information into Dataframe
+
+```{r}
+chess_cleaned <- data.frame(name,state,points,pre_rating)
+```
+
+
+### **Calculating Pre Chess Rating of Opponents; Adding to DF**
+
+As a final step, I need to add the Average Pre Chess Rating of Opponents to my chess_cleaned df created above. There are 6.375 opponents for every player ("name"), therefore there are some players who played fewer than 7 matches. 
+
+```{r}
+#Average of 6.375 opponents for every player
+length(opponents) / length(name)
+```
+As a solution, I'll create a matrix containing the pair numbers each player ("name") played, this means there will be NA values accounting for missed matches.
+
+```{r}
+col_df <- str_split(PairNamePointsOpp, pattern = "\\|",simplify = TRUE)
+
+opp_matrix <- matrix(as.numeric(str_extract_all(col_df[,4:10], pattern = "..$")), ncol = 7)
+```
+
+I'll run a for loop over that matrix, averaging for each row (while skipping over NA values) the opponents' pre ratings.
+
+```{r}
+avg_opp_pre_rating <- c()
+
+for(i in 1:nrow(opp_matrix)){
+  avg_opp_pre_rating[i] <- round(mean(pre_rating_adj[opp_matrix[i,]], na.rm = TRUE),0)
+}
+```
+
+Finally I'll add this column to my df.
+```{r}
+chess_cleaned$avg_opp_pre_rating = avg_opp_pre_rating
+```
+
+
+### **Showing Dataframe; Writing to CSV**
+```{r}
+chess_cleaned
+
+#User should write to whatever path they want. For me, it's my desktop.
+write.csv(chess_cleaned,"C:\\Users\\rossboehme\\Desktop\\chess.csv",row.names=FALSE)
+```
