@@ -1,0 +1,147 @@
+---
+title: "DATA607-Assignment4"
+author: "Ross Boehme"
+date: "2023-02-25"
+output: html_document
+---
+
+<!-- Assignment 4: 
+1. Use tiydr and dplyr to tidy and transform the data given in a PDF. 
+2. The PDF table contains arrival delays for two airlines across five destinations.
+3. Perform analysis to compare the arrival delays for the two airlines. 
+4. Your code should be in an R Markdown file, posted to rpubs.com, and should include narrative
+descriptions of your data cleanup work, analysis, and conclusions. Please include in your
+homework submission:
+- The URL to the .Rmd file in your GitHub repository. and
+- The URL for your rpubs.com web page.
+-->
+
+Loading packages for data manipulation and structuring.
+```{r}
+library(dplyr)
+library(knitr)
+library(tidyr)
+library(stringr)
+```
+
+Reading in CSV data, calling it "flights"
+```{r}
+flights <- read.csv('https://raw.githubusercontent.com/rossboehme/DATA607/main/assignment4/Assignment4-TidyingTransformingData-AirlinesCSV.csv')
+```
+
+Filling in blank cells, removing empty third row, and labeling columns. This will make the data easier to manipulate by having more named cells. 
+```{r}
+flights[2,1] <- flights[1,1]
+flights[5,1] <- flights[4,1]
+
+flights <- flights %>% na.omit()
+
+names(flights) <- c("airline","arr_status",colnames(flights)[3:7]) 
+```
+
+While this dataframe as-is contains useful flight information, it doesn't adhere to the principles of a "tidy" data set per our textbook [R for Data Science](https://r4ds.had.co.nz/tidy-data.html):
+
+1. Each variable must have its own column.
+2. Each observation must have its own row.
+3. Each value must have its own cell.
+
+The advantages of adhering to these principles are multifold. Storing data in the recommended way for R ensures that packages are as useful as possible. For example, the mutate function in dplyr assumes data adhere to these principles, making it easy to calculate fields using multiple columns. 
+
+Therefore I will continue my data preparation below to ensure my data is "tidy." 
+
+The gather and spread functions from tidyr can pivot my data to make this occur. 
+
+```{r}
+flights <- flights %>% 
+   gather(3:7, key ="destination", value = "num_flights" ) %>%
+   spread(key = arr_status, value=num_flights)
+```
+
+Now each of my variables (airline, destination, delayed flights, and on time flights) has its own column. The numeric quality I'm "observing" with this data set is the number of flights per airline, arrival status, and destination. Pivoting the data ensures there's one arr_delay and one arr_ontime observation per row. By satisfying these two aforementioned column and row principles, I also satisfy the third principle of "tidy" data: Each value having its own cell.  
+
+Next I need to change my column names and the data type of the num_arrivals columns so they're numeric and without spaces in their titles. To not introduce NAs by coercion when I change the type, I'll first get rid of comma characters. 
+
+```{r}
+flights <- flights %>%
+  mutate(across(delayed:"on time", ~as.numeric(str_remove(.x, ","))))
+
+names(flights) <- c(colnames(flights)[1:2],"arr_delayed","arr_ontime") 
+```
+
+Finishing up, I'll replace periods in the destination names with spaces to make them more accurate/graphs cleaner. Finally, I'll add a column with "total arrivals" to make calculations easier.
+
+```{r}
+flights$destination <- flights$destination %>% str_replace_all('\\.', ' ')
+
+flights <- flights %>% 
+  mutate(total_arrivals = arr_delayed + arr_ontime)
+```
+
+Now my data are ready to compare arrival delays for the two airlines. I'll analyze the data in three steps: 
+1. Provide an overview of the data.
+2. Compare arrival delays for the two airlines.
+3. Make conclusions/recommendations about which airline to use.
+
+### Data Overview
+- There were 11,000 total flights in this data set. 88% arrived on time while 12% were delayed.
+
+```{r}
+ontime_v_delayed <- flights %>%
+  summarize(arr_ontime = sum(arr_ontime)
+  ,arr_delayed = sum(arr_delayed)
+  ,total_arrivals = sum(total_arrivals)
+  ,pct_on_time = round(arr_ontime/sum(total_arrivals),2)*100
+  ,pct_delayed = round(arr_delayed/sum(total_arrivals),2)*100)
+ontime_v_delayed
+```
+
+- These 11,000 flights had five destination cities. 50% arrived in Phoenix; 22% arrived in Seattle; 12% in Los Angeles; 10% in San Francisco; 6% in San Diego.
+- The destination with the highest proportion of on time arrivals was Phoenix with 92%, followed by San Diego with 88%, Los Angeles with 87%, Seattle with 85%, and San Francisco with 78%.
+```{r}
+destination_compare <- flights %>%
+  group_by(destination) %>%
+  summarize(total_arrivals = sum(total_arrivals)
+  ,pct_of_total_arrivals = round(total_arrivals/sum(flights$total_arrivals),2)*100
+  ,arr_ontime = sum(arr_ontime)
+  ,arr_delayed = sum(arr_delayed)
+  ,pct_on_time = round(arr_ontime/sum(total_arrivals),2)*100,
+  ,pct_delayed = round(arr_delayed/sum(total_arrivals),2)*100)
+destination_compare
+```
+### Comparing Arrival Delays
+- AM West accounted for 66% of the 11,000 total flights, while Alaska made up the other 34%. 
+- 87% of Alaska flights arrived on time while 89% of AM West flights did so.
+
+```{r}
+airline_compare <- flights %>%
+  group_by(airline) %>%
+  summarize(arr_ontime = sum(arr_ontime)
+  ,arr_delayed = sum(arr_delayed)
+  ,total_arrivals = sum(total_arrivals)
+  ,pct_of_total_arrivals = round(total_arrivals/sum(flights$total_arrivals),2)*100
+  ,pct_on_time = round(arr_ontime/sum(total_arrivals),2)*100
+  ,pct_delayed = round(arr_delayed/sum(total_arrivals),2)*100)
+airline_compare
+```
+
+- On an airline and destination combination level, Alaska Airlines flights arriving in Phoenix were on time most often (95%), followed by AM West flights arriving in Phoenix (92%), then Alaska flights arriving in San Diego (91%). 
+
+```{r}
+airline_destination_compare <- flights %>%
+  group_by(airline,destination) %>%
+  summarize(arr_ontime = sum(arr_ontime)
+  ,arr_delayed = sum(arr_delayed)
+  ,total_arrivals = sum(total_arrivals)
+  ,pct_of_total_arrivals = round(total_arrivals/sum(flights$total_arrivals),2)*100
+  ,pct_on_time = round(arr_ontime/sum(total_arrivals),2)*100
+  ,pct_delayed = round(arr_delayed/sum(total_arrivals),2)*100)
+airline_destination_compare %>% arrange(desc(pct_on_time))
+```
+
+
+### Recommending Airlines/Destinations (Conclusion)
+Please note that all recommendations below are based on a limited sample set. These data are for only two airlines over an unknown time span, and from an unknown source. I could make stronger recommendations if I had more background on the data and a larger sample size. 
+
+- If you want your arrival to be on time, your best choice of destination (independent of airline) is Phoenix. Flights arrived on time there at a rate of 92%. This was both the best city for on time arrivals via AM West (92%) as well as Alaska (95%).
+- The worst destination for on time arrivals was San Francisco. Only 78% were on time, 8% less than the second worst destination, Seattle. San Franciso had the lowest rate of on time arrivals for both airlines, 71% via AM West, and 83% via Alaska.
+- Both observed airlines were similarly timely, so it's difficult to make a strong recommendation either way. Only 11% of AM West flights had delayed touchdowns, while 13% of Alaska flights did, though those numbers could be skewed by the destinations each airline went to. AM West's data came from a larger sample size (66% of total flights), increasing confidence in the result. Therefore, AM West is the better airline, though Alaska would likely provide a similar experience.
