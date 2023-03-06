@@ -1,0 +1,471 @@
+---
+title: "DATA 607 - Project 2"
+author: "Ross Boehme"
+date: "2023-03-04"
+output: html_document
+---
+
+## DATA 607 Project 2 Description
+- For three datasets, create a .CSV file (or optionally, a MySQL database!) that includes all of the information included in the dataset. You’re encouraged to use a “wide” structure similar to how the information appears in the discussion item, so that you can practice tidying and transformations as described below.
+- Read the information from your .CSV file into R, and use tidyr and dplyr as needed to
+tidy and transform your data. [Most of your grade will be based on this step!]
+- Perform the analysis requested in the discussion item.
+- Your code should be in an R Markdown file, posted to rpubs.com, and should include narrative descriptions of your data cleanup work, analysis, and conclusions.
+
+## Definitions
+- Wide vs. Long data: It's better to use the long format for storing data and wide format for data analysis at the end of a workflow (after data dimensionality is reduced).
+- Wide dataset: Classic Excel way, with lots of columns. Subject's repeated responses in a single row, and each response in a separate column. Value *do not* repeat in the first column.
+- Long dataset: Values in the first column repeat. Advantage is you don't waste space if some data are missing and do not have to modify the table structure if a new feature is added.
+
+## Chosen Datasets (linked to source URL)
+1. [New York State Gasoline Retail Prices Weekly Average by Region: 2007 to 2023](https://data.ny.gov/Energy-Environment/Gasoline-Retail-Prices-Weekly-Average-by-Region-Be/nqur-w4p7)
+2. [MTA Daily Ridership Data March 2020 to March 2023](https://data.ny.gov/Transportation/MTA-Daily-Ridership-Data-Beginning-2020/vxuj-8kew)
+3. [Equity in Athletics 2018-19 Data](https://ope.ed.gov/athletics/#/datafile/list)
+
+## Reading Necessary Packages
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+```
+
+## Data Set 1 Reading and Tidying
+Downloading raw data CSV from NY government website
+```{r}
+nygas <- read.csv("https://data.ny.gov/api/views/nqur-w4p7/rows.csv?accessType=DOWNLOAD&sorting=true")
+```
+
+Description of data from source: "Gasoline retail prices weekly average by region dataset provides the weekly average retail gasoline prices for New York State and sixteen New York metropolitan regions in U.S. dollars per gallon. Data is a weekly average from October 2007 through current. Some metropolitan regions begin in 2017."
+
+Understanding initial data format. There are 18 columns and 802 rows. Data are in a wide format. The first column is Date, which is the Monday of each week dating from October 2007 to present (801 observations). The second column is the average gas price for New York state combined. The other 16 columns are the average gas price per week for 16 New York state metropolitan regions. 
+
+Date column is in character format, which I'll need to eventually change to date format.
+
+```{r}
+head(nygas) #df preview
+
+nrow(nygas) #number of rows = 801
+ncol(nygas) #number of columns = 18
+
+names(nygas) #column names
+
+str(nygas) #data types
+
+nygas %>% #show min and max of Date range
+  mutate(Date = lubridate::mdy(Date)) %>% 
+  summarise(min = min(Date),
+            max = max(Date))
+
+```
+
+Approach:
+1. Clean Column Names
+2. Pivot data to long format with columns "date | region | price_per_gal" (data dictionary would define columns; not necessary to clarify "usd_gas_prices_per_gallon" for example in the column name)
+
+Clean column names to include only metro title
+```{r}
+names(nygas) <- str_replace_all(string = names(nygas), pattern = "\\.Average.*", replacement = "") 
+names(nygas) <- str_replace_all(string = names(nygas), pattern = "\\.", replacement = " ") 
+```
+
+Pivoting table to long format; making all column names lower case; converting date column to date format to prep for data analysis
+```{r}
+longgas <- nygas %>% 
+  pivot_longer(
+    cols = colnames(nygas)[2:ncol(nygas)],
+    names_to = "metro",
+    values_to = "price_per_gal"
+)
+
+names(longgas) <- tolower(names(longgas))
+
+longgas$date <- lubridate::mdy(longgas$date)
+```
+
+Showing new format of df
+```{r}
+head(longgas)
+```
+
+## Data Set 1 Analysis
+Analysis instructions from data set poster Susanna Wong (cannot embed due to login permission required):
+- Create a line graph to view the trend or compare the prices of the gasoline for each region. We can view if the prices increases or decreases overall.
+
+This initial line graph is quite messy due to the long list of metros.
+```{r}
+ggplot(longgas) + 
+  geom_line(aes(date, price_per_gal, color = metro)) 
+```
+
+I'll group the metros so trends are more obvious
+```{r}
+#Create groups for line graph color visualization
+west_ny <- c('Rochester','Elmira','Buffalo','Batavia')
+east_ny <- c('Albany','Dutchess','Kingston')
+central_ny <- c('Binghamton','Ithaca','Syracuse','Utica')
+north_ny <- c('Glens Falls','Watertown')
+nyc_metro <- c('Nassau','White Plains')
+nyc <- c('New York City')
+nys <- c('New York State')
+
+longgas <- longgas %>% 
+  mutate(ny_region = case_when((metro %in% west_ny) ~ 'West/Central',
+                            (metro %in% east_ny) ~ 'East/North',
+                            (metro %in% central_ny) ~ 'West/Central',
+                            (metro %in% north_ny) ~ 'East/North',
+                            (metro %in% nyc_metro) ~ 'NYC Metro',
+                            (metro %in% nys) ~ 'New York State Overall',
+                            (metro %in% nyc) ~ 'NYC',
+                            TRUE ~ 'Default')) 
+```
+
+Now I'll group my dataframe by those regions for visualization. Please note that this makes the data less accurate because it's averaging the average gas price per metro to form an imperfect proxy for "Average Price Per Gallon of Gas by New York State Region." A better measure of the average gas price per region would include observations from every gas station in that region. 
+```{r}
+gas_region <- longgas %>%
+  group_by(date,ny_region) %>%
+  summarise(price_per_gal=mean(price_per_gal))
+
+ggplot(gas_region) + 
+  geom_line(aes(date, price_per_gal, color = ny_region)) +
+  ggtitle('Average Price Per Gallon of Gas by New York State Region - October 2007 to February 2023') + #giving plot title
+  xlab('Date') + ylab('Avg Price of Gallon of Gas') #giving axes titles
+```
+
+Two issues remain with the above chart.
+1. It's still difficult to see each individual line and make out the colors
+2. It appears that some regions only had their data collected after a certain date, approximately around 2017.
+
+To fix these issues, I'll change the time horizon of the chart to only include rows where there are no blank values. And in my next chart, I'll group by month so there's less noise. 
+```{r}
+#Identifying max "date" value where columns have blanks, then adding a week to it for new min_date value
+min_date <- max(longgas[is.na(longgas$price_per_gal),]$date) + 7 #Result is 2017-01-09
+
+clean_gas_region <- longgas %>% filter(date >= min_date)
+min(clean_gas_region$date) #checking to make sure min date is 2017-01-16
+```
+
+Graphing again, now with a shorter time horizon and no NA values for price_per_gal. It is imperfect to take an average of an average when grouping by month but the goal here is to analyze general trends. 
+```{r}
+month_gas_region <- clean_gas_region %>%
+  group_by(month=lubridate::floor_date(date, unit = 'month'), ny_region) %>%
+  summarise(price_per_gal=mean(price_per_gal))
+
+ggplot(month_gas_region) + 
+  geom_line(aes(month, price_per_gal, color = ny_region)) +
+  ggtitle('Average Price Per Gallon of Gas by New York State Region - Oct 2007-Feb 2023') + #giving plot title
+  xlab('Date') + ylab('Avg Price of Gallon of Gas (USD)') #giving axes titles +
+  scale_y_continuous(labels = scales::dollar_format(prefix="$"))
+
+```
+
+Answering Susanna's original analysis instructions: "Create a line graph to view the trend or compare the prices of the gasoline for each region. We can view if the prices increases or decreases overall."
+- Overall gas prices tended to increase over time between Jan 2017 and Feb 2023.
+- The highest gas prices appeared in the middle of 2022 while the lowest appeared in the middle of 2021. 
+- By region, New York State gas prices tended to move with each other. Gas prices were more divergent by region earlier in the time horizon (2017-2020) before becoming more similar around 2021. 
+
+
+## Data Set 2 Reading and Tidying
+```{r}
+mta <- read.csv("https://data.ny.gov/api/views/vxuj-8kew/rows.csv?accessType=DOWNLOAD&sorting=true")
+```
+
+Description of data from source: "The daily ridership dataset provides systemwide ridership and traffic estimates for subways, buses, Long Island Rail Road, Metro-North Railroad, Access-A-Ride, and Bridges and Tunnels, beginning 3/1/20 (4/1/20 for LIRR and Metro-North), and provides a percentage comparison against a comparable pre-pandemic date."
+
+Understanding initial data format. There are 15 columns and 1097 rows. Data are in a wide format. The first column is Date, which is every day from March 2020 to present (1097 observations). Then there are two columns each for 7 types of transportation options (14 columns total): one columns shows the transportation option's ridership on that date, the other column compares ridership to pre-pandemic norms.  
+
+Date column is in character format, which I'll need to eventually change to date format.
+
+```{r}
+head(mta) #df preview
+
+nrow(mta) #1097 rows
+ncol(mta) #15 columns
+
+names(mta) #column names
+
+str(mta) #data types
+
+mta %>% #show min and max of Date range
+  mutate(Date = lubridate::mdy(Date)) %>% 
+  summarise(min = min(Date),
+            max = max(Date))
+
+```
+
+Approach:
+1. Clean column names to make calculations / graphing easier (I can always label the outputs of the calculations/graphs with greater specificity)
+2. Pivot data to long format with columns "date | transport | users | users_v_prepandemic" (data dictionary would define columns; not necessary to clarify "estimated_riders" instead of simply "users" in the column name). I'm using "users" as opposed to "riders" because some transporation options are quantified by "traffic."
+3. Label dates as weekdays or weekends
+4. Ensure date is in date format
+
+Clean column names to only transit method and "Ridership/Trips/Traffic" or "Day", then transforming those columns to be "Transit Method | Riders" or "Transit Method | Users Ratio to Prepandemic." Making column titles lowercase. Adding column for total_riders on date.
+```{r}
+names(mta) <- str_replace_all(string = names(mta), pattern = "\\.{2}(.*?\\w)*\\.", replacement = ".") 
+names(mta) <- str_replace_all(string = names(mta), pattern = "\\.", replacement = "_") 
+
+names(mta) <- str_replace_all(string = names(mta), pattern = "(Ridership|Traffic|Trips)$", replacement = "Users") 
+names(mta) <- str_replace_all(string = names(mta), pattern = "Day$", replacement = "Users_Ratio_to_Prepandemic") 
+
+names(mta) <- tolower(names(mta))
+
+mta <- mta %>% #sum total riders
+  rowwise() %>%
+  mutate(total_users = sum(across(ends_with("users")), na.rm = TRUE))
+
+mta <- mta %>% #avg pandemic ratio
+  mutate(daily_avg_user_ratio = mean(c_across(ends_with("prepandemic")), na.rm = TRUE))
+```
+
+Pivoting table to long format; changing NAs in users column to 0s; checking to make sure long format totals align with wide format totals; converting date column to date format to prep for data analysis
+```{r}
+mta_long <- mta %>% 
+  pivot_longer(cols = ends_with("users"), names_to = "transit_type", names_pattern = "(.*)users$", values_to = "users_value") %>%
+  pivot_longer(cols = ends_with("prepandemic"), names_to = "prepandemic_ratio", names_pattern = "(.*)prepandemic$", values_to = "user_ratio") %>%
+  mutate(transit_type = gsub("_$", "", transit_type),
+  prepandemic_ratio = gsub("_$", "", prepandemic_ratio)) 
+
+mta_long <- mta_long[mapply(grepl, mta_long$transit_type, mta_long$prepandemic_ratio),]
+
+mta_long <- mta_long %>%
+  mutate(users_value = coalesce(users_value, 0)) %>%
+  select(-c(daily_avg_user_ratio,prepandemic_ratio))
+
+#checking to make sure my "users" value after going from wide to long format is the same
+rider_check <- mta_long %>%
+  group_by(transit_type) %>%
+  summarise(total_riders=sum(users_value))
+
+sum(mta$total_users) == sum(mta_long$users_value) #Yields True
+
+round(mean(mta$daily_avg_user_ratio),2) == round(mean(mta_long$user_ratio, na.rm=TRUE),2) #Yields True. Need to round due to small differences in rounded calculations.
+
+mta$date <- lubridate::mdy(mta$date)
+mta_long$date <- lubridate::mdy(mta_long$date)
+```
+
+Adding weekday and weekend column status "day_type". Finalizing column names/order. Finalizing transit_type names (capitalizing them for easier pretty visualizations).
+```{r}
+mta_long$day_type <- ifelse(weekdays(mta_long$date) %in% c("Saturday", "Sunday"), "Weekend", "Weekday")
+
+colnames(mta_long) <- c('date','transit_type','users_value','users_ratio_to_prepandemic','day_type')
+
+mta_long$transit_type <- gsub('buses', 'Buses', mta_long$transit_type)
+mta_long$transit_type <- gsub('lirr', 'LIRR', mta_long$transit_type)
+mta_long$transit_type <- gsub('access_a_ride', 'Access-A-Ride', mta_long$transit_type)
+mta_long$transit_type <- gsub('bridges_and_tunnels', 'Bridges and Tunnels', mta_long$transit_type)
+mta_long$transit_type <- gsub('staten_island_railway', 'Staten Island Railway', mta_long$transit_type)
+mta_long$transit_type <- gsub('metro_north', 'Metro North', mta_long$transit_type)
+mta_long$transit_type <- gsub('subways', 'Subways', mta_long$transit_type)
+
+```
+ 
+Displaying finalized updated long format df
+```{r}
+head(mta_long)
+```
+
+## Data Set 2 Analysis
+Analysis instructions from data set post respondent Mohamed Hassan (cannot embed due to login permission required): 
+- During the pandemic, ridership was significantly low, and with some exceptions, hasn't reverted back to pre-pandemic levels. I'm almost positive that the MTA conducts regular analyses comparing ridership prepandemic and during the pandemic. This is an important dataset that is often used to justify expanding or cutting service.
+
+As with the gas prices graph, this initial line graph is quite messy due to the long list of transit_types, the frequent observation cadence (daily), and the different y scales. This is even before I add useful parameter: Weekday/Weekend status. For this analysis, I'll instead choose to group all transit_types into two categories: Driving v. Public Transit, to highlight how habits may have changed over the course of the pandemic. If needed, I'll use a log scale to compare users_value between Driving v. Public Transit. I'll also highlight 2020 weekdays in particular so the effect of social distancing is focused on.
+```{r}
+ggplot(mta_long) + 
+  geom_line(aes(date, users_value, color = transit_type)) 
+```
+I'll group the transit_types so trends are more obvious
+```{r}
+#Create groups for line graph color visualization
+public_transit <- c('Access-A-Ride','Buses','LIRR','Metro North','Staten Island Railway','Subways')
+driving <- c('Bridges and Tunnels')
+```
+
+```{r}
+mta_long <- mta_long %>% 
+  mutate(transit_group = case_when((transit_type %in% public_transit) ~ 'Public Transit',
+                            (transit_type %in% driving) ~ 'Driving',
+                            TRUE ~ 'Default')) 
+```
+
+Again, please note that grouping at a higher aggregate level for "averages" data like "average travelers ratio to prepandemic" makes it less accurate. Taking the average of an average is not mathematically sound but it can be directionally useful. 
+```{r}
+weekday_commute_2020 <- mta_long %>%
+  group_by(week=lubridate::floor_date(date, unit = 'week'), transit_type, transit_group, day_type) %>%
+  summarise(avg_travelers_ratio_to_prepandemic=mean(users_ratio_to_prepandemic),
+            weekly_travelers=sum(users_value)) %>%
+  filter(week < '2021-01-01' & day_type == 'Weekday') 
+```
+
+Graphing again, only looking at weekday commute ratio in 2020 by Driving v. Public Transit. I recognize bar charts are not as good as line charts for timeseries data, however I'll make a bar chart here for variety and because it does make volumes easy to compare via bar heights. 
+```{r}
+ggplot(weekday_commute_2020,aes(x = week,y = avg_travelers_ratio_to_prepandemic)) + 
+    geom_bar(aes(fill = transit_group),stat = "identity",position = "dodge") +
+    scale_y_continuous(labels = scales::percent) +
+    ggtitle('2020 Average Travel Ratio % Per Transit Group vs. Prepandemic Volume') +
+    xlab('Date') + ylab('Avg Travel Ratio % vs. Prepandemic') 
+```
+
+Repeating analysis instructions from Mohamed Cruz: "During the pandemic, ridership was significantly low, and with some exceptions, hasn't reverted back to pre-pandemic levels. I'm almost positive that the MTA conducts regular analyses comparing ridership prepandemic and during the pandemic. This is an important dataset that is often used to justify expanding or cutting service."
+- This 2020 weekday subset of the dataset shouldn't be used to justify expanding or cutting service as it doesn't account for long term trends in terms of WFH, population growth, and safety considerations.
+- However this subset might be slightly helpful in estimating commuter volumes should another pandemic occur which requires social distancing. Public transit and driving use rates dipped at similarly steep rates immediately following the lockdowns, however driving was relatively quick to recover. Driving was back to ~80% of prepandemic levels on weekdays in 4.5 months (mid-July) while public transit's peak was less than 80%, achieved in December (8.5 months after lockdown).
+- Based on the above, it would make sense to invest in driving infrastructure immediately following a pandemic, perhaps delaying improvements for public transit until after. 
+
+
+## Data Set 3 Reading and Tidying:  
+```{r}
+url_athletics <- "ope.ed.gov/athletics/api/dataFiles/file?fileName=EADA_2020-2021.zip"
+download.file(url_athletics,"Schools.xlsx.zip")
+unzip("Schools.xlsx.zip")
+athletics <- readxl::read_excel("Schools.xlsx")
+```
+Description of data: Data from universities and colleges related to gender equity on their sports programs. Data include spending per institution on each team, listing coaches' salaries, recruiting expenses, participation volume, and scholarship amounts. The goal of this information is to hold collegiate athletic departments accountable for supporting men's and women's sports equally: In salary, scholarships, expenditures, and so forth. 
+
+Understanding initial data format. There are 128 columns and 14382 rows. Data are generally in a wide format.
+
+The first 15 columns are information about the college institution (e.g. name, location). The rest are sports-specific information about participation rates, expenditures, revenue, and so forth, with one column for each field.
+
+```{r}
+head(athletics) #df preview
+
+nrow(athletics) #number of rows = 2074
+ncol(athletics) #number of columns = 167
+
+names(athletics) #column names
+
+str(athletics) #data types
+```
+Approach:
+1. Because there are so many values in this data set, I'll begin with feature selection: selecting only columns useful to my analysis. 
+2. Clean column names and adjust data to make calculations/graphing easier (I can always label the outputs of the calculations/graphs with greater specificity)
+
+Column Approach
+- Narrowing to columns which will help me answer the question: Do colleges spend equally on men's and women's basketball programs, controlling for as many factors as possible (school size, revenue, location, etc.)? To answer this question, I'm especially interested in comparing intra-school expenditures between men's and women's programs (for maximum control), but I'll also look at expenditures at a macro-level for overall trends. 
+- I may not be able to answer this question perfectly, but this preliminary data analysis should let me know if there are data worth diving into further. 
+- I'm curious about this question because Title IX requires proportional expenditure on men's and women's athletics programs based on school enrollment. But that doesn't mean that a given sport (e.g. basketball) will need to have equal expenditures between the men's and women's teams. Do schools spend more on women's teams to make up for a Football-created spending deficit on women? Or is there favoritism towards men's teams? 
+
+For this analysis, I want to control as many factors as possible. Therefore I'll look at:
+- Where school enrollments are over 1,000 (reduce outlier small schools) and with gender ratios where women and men make up no more/no less than 55%/45% of the school (control for title IX).
+- Private, non-profit 4 year institutions (control for similar quality of schools)
+- In particular, comparing expenditure on men's and women's basketball at the same school will be helpful, thus controlling for cost of living and school culture
+
+Therefore my useful columns are: 
+1. institution_name - School Name
+2. classification_name - NCAA Classification Name
+3. sector_cd - Coded value for sector name -- would typically get rid of immediately but will enable me to filter schools faster than writing regex for sector_name
+4. sector_name - Public or private sector school, 2 or 4 year enrollment, public or non-profit
+5. EFMaleCount- Enrollment of men at institution
+6. EFFemaleCount - Enrollment of women at institution
+7. EFTotalCount - Total enrollment at institution -- this is a calculated column I'd typically get rid of, but it's useful for creating my an initial school gender ratio control 
+8. EXPENSE_MENALL - Total expenses on men's sport
+9. EXPENSE_WOMENALL - total expenses on women's sport
+10. REVENUE_MENALL - Total revenue from on men's sport
+11. REVENUE_WOMENALL - Total revenue from women's sport
+12. Sports - Sport names (e.g. filter for Basketball)
+
+Selecting columns, narrowing data per "Column Approach" criteria above.
+```{r}
+#I'll get rid of some of these if they're not necessary for my analysis, but for now including them to help my filtering
+wide_athlete <- athletics[,c('institution_name','classification_name','sector_cd','sector_name','EFMaleCount','EFFemaleCount','EFTotalCount','EXPENSE_MENALL','EXPENSE_WOMENALL','REVENUE_MENALL','REVENUE_WOMENALL','Sports')]
+
+wide_athlete <- wide_athlete %>%
+  filter(grepl("NCAA Division III",classification_name),#Only NCAA Division III
+         sector_cd == 2, #Only Private nonprofit, 4 year or above schools
+         Sports == 'Basketball',
+         EFTotalCount > 1000) #Only schools with 1,000+ enrollment
+
+#Creating gender ratio columns to narrow both genders to minimum of 45% of school enrollment
+#Not permanent columns since I won't need them later
+wide_athlete <- wide_athlete %>%
+  mutate(men_pct_enrollment = EFMaleCount/EFTotalCount,
+         women_pct_enrollment = EFFemaleCount/EFTotalCount) %>%
+  filter(women_pct_enrollment > 0.45 & men_pct_enrollment > 0.45)
+
+#Removing gender ratio cols now that I've used them
+wide_athlete <- wide_athlete[1:(length(wide_athlete)-2)]
+  
+```
+
+The next question is whether to focus on NCAA Division III schools with football or without football. Football status is an important input. Because it's an expensive sport to operate (many players, a lot of equipment, investment for school spirit), football highly skews athletic spending per gender. At schools with football, women's teams can spend more on their teams to make up for the deficit. Therefore If there's an adequate sample, I will focus only on NCAA Division III sports *without* football. 
+
+```{r}
+table(wide_athlete$classification_name)
+```
+
+Unfortunately, per the above R chunk's output, there are only 3 schools which meet all my criteria. If I look at schools that meet every criteria, but *do* have football, I'll have a sample of 53. Even though this data analysis is only preliminary, 3 is not an adequate sample size. I'll instead look at schools *with* football. My goal is to figure out whether there is a story worth investigating about basketball expenditure per gender; I can create a more perfect answer and set of criteria later. 
+
+```{r}
+wide_athlete <- wide_athlete %>%
+  filter(grepl("with football",classification_name)) #Only schools with football
+```
+
+Next, I'll remove all columns which don't contain directly necessary information for my analysis. There is an alternative approach which I could have explored: Keeping as many factors as possible, and limiting my math functions to filter for only the columns I need. This "more data is better" approach is appropriate sometimes. I leveraged this approach in the prior two analyses (NY gas and MTA, above), therefore, in this instance I will  reduce my features to the necessities, which makes my data set easier to visualize. 
+
+```{r}
+#Reducing features to necessities. Graph titles should therefore include all the criteria for this data set: NCAA Division III institutions with football; Private nonprofit, etc. 
+skinny_athlete <- wide_athlete[,c('institution_name','EXPENSE_MENALL','EXPENSE_WOMENALL','REVENUE_MENALL','REVENUE_WOMENALL')]
+```
+
+Before visualizing my data, note that currently mens and women's data are on the same rows. I'll split them out to make the data a "long" format.
+
+```{r}
+long_athlete <- skinny_athlete %>% 
+  pivot_longer(
+    cols = starts_with("EXPENSE"),
+    names_to = "gender_expense",
+    values_to = "expense"
+) %>%
+  pivot_longer(
+    cols = starts_with("REVENUE"),
+    names_to = "gender_revenue",
+    values_to = "revenue"
+)
+
+#I want to keep only rows where the gender-expense and gender-revenue are MENALL or both are WOMENALL. Otherwise I'll have duplicates
+long_athlete <- long_athlete %>% 
+  filter((gender_expense == "EXPENSE_MENALL" & gender_revenue == "REVENUE_MENALL") | (gender_expense == "EXPENSE_WOMENALL" & gender_revenue == "REVENUE_WOMENALL"))
+
+#Having only one gender column, renaming to be more specific in terms of "basketball"
+
+long_athlete <- long_athlete %>% 
+  mutate(across('gender_expense', str_replace, 'EXPENSE_MENALL', 'MEN'),
+         across('gender_expense', str_replace, 'EXPENSE_WOMENALL', 'WOMEN'))
+
+long_athlete <- long_athlete[,c('institution_name','gender_expense','expense','revenue')]
+
+names(long_athlete) <- c('institution_name','gender','basketball_expense','basketball_revenue')
+```
+
+Previewing dataframe
+```{r}
+head(long_athlete)
+```
+
+## Data Set 3 Analysis
+Analysis instructions from data set poster Ross Boehme (cannot embed due to login permission required): Do colleges spend equally on men's and women's basketball programs, controlling for as many factors as possible (school size, revenue, location, etc.)? 
+- To create a controlled comparison, as a reminder, my current dataframe looks at only non-profit 4 year colleges, who participate in basketball on an NCAA Division III level, with 1,000+ enrollment, only schools with football programs, and with a minimum of 45% enrollment for each gender. 
+
+It appears that the basketball_expense and basketball_revenue values are highly similar for both genders. The online dictionary available for these data provided no further clarity about their definitions; Whether "expenses" were included in "revenues" for example, which to me would seem to be the case. Before further analysis, I'd contact the institution that collect these data to learn more.
+
+```{r}
+long_athlete %>%
+  group_by(gender) %>%
+  summarise(sum_expense = sum(basketball_expense),
+            sum_revenue = sum(basketball_revenue))
+```
+
+My findings: expenses are higher for men's than for women's programs, a factor that's not attributable to revenue. Revenues for these basketball programs per gender are similarly proportional to expenses: 104% revenue to expense ratio for men and 102% for women. However, men's expenses are 116% that of women's.
+
+Given the limitations of my current dataset, I'm not prepared to make broad declarations about expense parity. However, it appears that men's programs receive further expenditure than women's. Further, charting each institutions expense ratios by gender could highlight certain institutions to investigate. 
+
+```{r}
+ggplot(long_athlete, aes(x=basketball_expense, y=basketball_revenue, color = gender)) +
+  geom_point(alpha=0.7) +
+  ggtitle('NCAA D3 Basketball Program Expenditure vs. Revenue Per Gender -- Selected Similar Schools') + 
+  xlab('Basketball Program Expenses (USD)') + ylab('Basketball Program Revenues (USD)') +
+  scale_y_continuous(labels = scales::dollar_format(prefix="$")) +
+  scale_x_continuous(labels = scales::dollar_format(prefix="$"))
+```
+Generally you can see that as expenses increase (x variable), revenues (y variable) increase. 
+
+
