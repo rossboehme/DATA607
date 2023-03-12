@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<catalog>
+	<book id="1">
+		<book_title>Naked Economics: Undressing the Dismal Science</book_title>
+		<author>Charles Wheelan</author>
+		<genre>Economics</genre>
+		<review>4/5</review>
+		<page_count>400</page_count> 
+	</book>
+	<book id="2">
+		<book_title>Principles for Dealing with the Changing World Order: Why Nations Succeed and Fail</book_title>
+		<author>Ray Dalio</author>
+		<genre>Economics; History</genre>
+		<review>3.5/5</review>
+		<page_count>576</page_count> 
+	</book>
+	<book id="3">
+		<book_title>Basic Economicse</book_title>
+		<author>Thomas Sowell</author>
+		<genre>Economics</genre>
+		<review>5/5</review>
+		<page_count>448</page_count> 
+	</book>
+    	<book id="4">
+		<book_title>The Second Machine Age: Work, Progress, and Prosperity in a Time of Brilliant Technologies</book_title>
+		<author>Erik Brynjolfsson; Andrew McAfee</author>
+		<genre>Economics</genre>
+		<review>4.5/5</review>
+		<page_count>336</page_count> 
+	</book>
+    	<book id="5">
+		<book_title>Money: The True Story of a Made-Up Thing</book_title>
+		<author>Jacob Goldstein</author>
+		<genre>Economics; History</genre>
+		<review>4/5</review>
+		<page_count>272</page_count> 
+	</book>
+</catalog>
