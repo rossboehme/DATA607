@@ -1,7 +1,7 @@
 [
 	{"book_title": "Naked Economics: Undressing the Dismal Science", "author": "Charles Wheelan", "genre": "Economics", "review": "4/5", "page_count": 400},
 	{"book_title": "Principles for Dealing with the Changing World Order: Why Nations Succeed and Fail", "author": "Ray Dalio", "genre": "Economics; History", "review": "3.5/5", "page_count": 576},
-	{"book_title": "Basic Economics", "author": "Thomas Sowell", "genre": 2000, "review": "5/5", "page_count": 448},
+	{"book_title": "Basic Economics", "author": "Thomas Sowell", "genre": "Economics", "review": "5/5", "page_count": 448},
     {"book_title": "The Second Machine Age: Work, Progress, and Prosperity in a Time of Brilliant Technologies", "author": "Erik Brynjolfsson; Andrew McAfee", "genre": "Technology; Economics", "review": "4.5/5", "page_count": 336},
     {"book_title": "Money: The True Story of a Made-Up Thing", "author": "Jacob Goldstein", "genre": "Economics; History", "review": "4/5", "page_count": 272}
 ]
