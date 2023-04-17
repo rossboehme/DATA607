@@ -1,0 +1,120 @@
+---
+title: "Tidyverse-Create"
+author: "Ross Boehme"
+date: "2023-04-14"
+output: html_document
+---
+
+### Assignment
+- Create an Example using one or more Tidyverse packages, and any dataset from fivethirtyeight.com or Kaggle, create a programming sample “vignette” that demonstrates how to use one or more of the capabilities of the selected TidyVerse package with your selected dataset.
+- You should clone the provided repository. Once you have code to submit, you should make a pull request on the shared repository. You should also update the README.md file with your example.
+-  After you’ve created your vignette, please submit your GitHub handle name in the submission link provided below. This will let your instructor know that your work is ready to be peer-graded.
+- You should complete your submission on the schedule stated in the course syllabus.
+
+### Introduction
+- As of tidyverse 1.3.0, the "library(tidyverse)" command loads eight packages with varying uses for data science: ggplot2, dplyr, tidyr, readr, purrr, tibble, string, and forcats. 
+- While I have used *ggplot2* before, for this assignment I will explore it further because it is perhaps the package which the greatest number of data analyses will use. In my business experience, at the end of almost every project, I need to summarize findings into a graphic or chart.
+- In addition to ggplot2, I will leverage the *dplyr* package from tidyverse to prepare my data for visualizations. dplyr is nearly essential to use in combination with ggplot2 because of its usefulness in organizing/grouping data.
+
+### Imports
+```{r}
+library(tidyverse)
+```
+
+### Reading Dataset
+- Dataset: Age-related info (date of birth, birthday, generation) for each congressperson for each session of congress from March 1919 (66th session) to January 2023 (118th). 
+- Taken From [538's Github](https://github.com/fivethirtyeight/data/tree/master/congress-demographics), related to the April 3, 2023 article "[Congress Today Is Older Than It's Ever Been](https://fivethirtyeight.com/features/aging-congress-boomers/)."
+```{r}
+congress <- read_csv('https://raw.githubusercontent.com/fivethirtyeight/data/master/congress-demographics/data_aging_congress.csv')
+names(congress)
+```
+
+Each row in this dataset is a congressperson for each session of congress. It has 14 columns, defined on [538's Github](https://github.com/fivethirtyeight/data/tree/master/congress-demographics). For easier reference in case a classmate chooses to extend my analysis, I'll define the columns below.
+1. "congress" (The session of Congress a congressperson is in, ranging from 66 to 118. There's a new session of congress every two years.)
+2. "start_date" (The start date of the session of Congress.)
+3. "chamber" (Whether a congressperson is in the Senate or House of Representatives.)
+4. "state_abbrev" (Which state a congressperson is from, abbreviated in two letter postal form e.g. "CA" for California.)
+5. "party_code" ("100" for democrats, "200" for Republicans, "328" for Independents.)
+6. "bioname" (Name of congressperson.)
+7. "bioguide_id" (Code used by Biographical Directory of US Congress to uniquely identify each member.)
+8. "birthday" (Congressperson date of birth.)
+9. "cmltv_cong" (How many terms of congress a representative has served in either the Senate or House.)
+10. "cmltv_chamber" (How many terms of congress a representative has served in their current chamber.)
+11. "age_days" (Congressperson's age in days.)
+12. "age_years" (Congressperson's age in years (including decimal points).)
+13. "generation" (Generation the congressperson belongs or belonged to, e.g. Greatest, Boomer, Silent, etc.)
+
+### Data Preparation
+1. While there are multiple columns I won't use in my preliminary "CREATE" analysis, I'll keep all columns from the raw data set in a dataframe in case a classmate chooses to "EXTEND" my analysis. The raw dataframe will be "congress" while the dataframe I use will be "congress_ross". 
+
+2. Subsetting dataframe "congress_ross" which has fewer columns (only those which I will use) with base R. This way when I'm creating visualizations in ggplot2 I won't have to subset the data as much to only include necessary columns. Also renaming columns for greater intuitiveness.
+```{r}
+congress_ross <- congress[c('congress','start_date','chamber','state_abbrev','party_code','birthday','age_years')]
+names(congress_ross) <- c('congress_sess','cong_start_date','chamber','state_abbr','party_code','birthday','age_years')
+```
+
+### Data Transformation and Visualization with dplyr and ggplot2
+
+3. *dplyr* is a highly versatile package for dataframe manipulation. The first functions I'll demonstrate are how it can "mutate" existing information into new columns.
+
+Using the "mutate" function, I can create a column based on another column as in mutate(new_col = old_col), which would copy old_col and generate new_col as the last column on the dataframe.
+
+In my instance, I'll leverage mutate to create new columns based on functions applied to other columns. Using lubridate::year(ymd_field) I can extract the year from a date. Using a case_when function I can evaluate values in the party_code column, and output a string in a new column.
+- Creating cong_start_year (from cong_start_date) to show how the average age of congress people has changed between sessions.
+- Transforming party_code to party_name for intuitiveness and easier charting. 
+```{r}
+congress_ross <- congress_ross %>%
+  dplyr::mutate(cong_start_year = lubridate::year(cong_start_date), 
+                party_name = case_when(
+                  party_code == 100 ~ "Democrat",
+                  party_code == 200 ~ "Republican",
+                  party_code == 328 ~ "Independent"
+    ))
+```
+
+dplyr can additionally be used to filter and pivot dataframes, organizing cuts of data which can then be charted with ggplot2. Below I use the filter function to separate Republican and Democrat dataframes, and filter for only session of congress starting on or after 1960. (Because Hawaii and Alaska became states in 1959.) In addition, I use dplyr to group by chamber and congress start year before calculating an aggregated average age for these members of Congress within the group.
+
+I take this filtered and pivoted dataframe from dplyr and then can make a highly customized plot with *ggplot2*. ggplot2 works primarily by entering arguments in into the ggplot function, then adding new functions after a plus ("+") sign. Below I enter arguments into ggplot() which create a plot with cong_start_year as the X and avg_age as the Y, with separate charted colors per chamber. Then I add additional features via functions concatenated with +. geom_line() to make a line graph; xlab() and ylab() to add axis labels; labs() to add a graph title plus caption; guides() for a legend; scale_y_continuous() for a y-axis scale; and geom_line() to change the size of the lines on the graph. 
+
+One can find the available parameters for each of these functions by typing ?functionname into the console. 
+
+As a final step, I put my two charts into side-by-side plots so they can be compared more easily. The plot_grid function comes from the cowplot library which is not a part of the tidyverse. 
+
+```{r}
+
+#Change Y axis minimum based on minimum age for member of congress
+repub_age <- congress_ross %>% 
+  dplyr::filter(cong_start_year>=1960,party_name=='Republican') %>%
+  dplyr::group_by(chamber,cong_start_year) %>%
+  dplyr::summarise(avg_age = mean(age_years)) %>%
+  ggplot(aes(x=cong_start_year,y=avg_age, color=chamber))+
+    geom_line(stat="identity", show.legend = TRUE) + 
+    xlab("Year Session of Congress Started") +
+    ylab("Avg Age of Representatives") +
+    labs(title = "Congressional Republicans: Avg Age", caption = "Source: FiveThirtyEight") + 
+  guides(fill=guide_legend(title="Skill Category")) + 
+  scale_y_continuous(limits = c(40,70)) +
+  geom_line(size=2)
+
+dem_age <- congress_ross %>% 
+  dplyr::filter(cong_start_year>=1960,party_name=='Democrat') %>%
+  dplyr::group_by(chamber,cong_start_year) %>%
+  dplyr::summarise(avg_age = mean(age_years)) %>%
+  ggplot(aes(x=cong_start_year,y=avg_age, color=chamber))+
+    geom_line(stat="identity", show.legend = TRUE) + 
+    xlab("Year Session of Congress Started") +
+    ylab("Avg Age of Representatives") +
+    labs(title = "Congressional Democrats: Avg Age", caption = "Source: FiveThirtyEight") + 
+  guides(fill=guide_legend(title="Skill Category")) + 
+  scale_y_continuous(limits = c(40,70)) +
+  geom_line(size=2)
+    
+```
+```{r}
+library(cowplot)
+plot_grid(repub_age,dem_age)
+```
+
+
+
+
