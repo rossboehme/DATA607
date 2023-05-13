@@ -1,0 +1,45 @@
+---
+title: "FinalProject-CitiBike"
+author: "Ross Boehme"
+date: "2023-04-29"
+output: html_document
+---
+
+
+```{r}
+url_cb0122 <- "http://s3.amazonaws.com/tripdata/202201-citibike-tripdata.csv.zip"
+download.file(url_cb0122,"202201-citibike-tripdata.csv.zip")
+unzip("202201-citibike-tripdata.csv.zip")
+cb_0122 <- read.csv("202201-citibike-tripdata.csv",sep=",",header=T)
+```
+## Google Maps Distance
+
+```{r}
+library(gmapsdistance)
+library(stringr)
+library(dplyr)
+cb <- cb_0122
+cb$start_lat <- paste0(cb$start_lat,"+")
+cb$start <- paste(cb$start_lat,cb$start_lng,sep="")
+cb$end_lat <- paste0(cb$end_lat,"+")
+cb$end <- paste(cb$end_lat,cb$end_lng,sep="")
+```
+
+### Taking random sample 
+```{r}
+```
+
+```{r}
+origin = cb$start
+destination = cb$end
+results = gmapsdistance(origin, destination, mode="bicycling", shape="long",key="AIzaSyBJcI5evyBxw0_sHhJeRHu8-3JkyV1odNI")
+```
+https://hwangnyc.medium.com/calculating-travel-time-and-distance-using-google-maps-api-in-r-bbc5b74df066
+https://www.rpubs.com/ntlrsmllghn/340112
+https://rpubs.com/dab31415/845763
+https://docs.google.com/document/d/1x0T7Jl9o4qZ750mBThhtO5R7iDnMYkdCI95UpKImhIg/edit
+plus also open up citibike excel doc
+
+## Weather
+install.packages("rnoaa")
+
