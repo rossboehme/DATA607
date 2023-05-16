@@ -1,0 +1,544 @@
+---
+title: "DATA607 - Final Project"
+author: "Ross Boehme"
+---
+
+### Section 1.0 - Introduction
+
+NYC is at an inflection point: Due to COVID, many people are interested in trying biking in the city. If they enjoy it, New Yorkers could develop a life-long habit. That's why it's important to evaluate the Citi Bike program now. 
+
+Citi Bikes are primarily a fixed cost for their corporate owner Lyft. Therefore the more they can be used throughout the year, the more profitable the program will be. Improving the bike can be a win-win: More profit for the owning company, more biking in the city, perhaps creating a virtuous cycle. The benefits of more Citi Bike usage are multifold: Less environmental pollution; Safety in numbers -- the more cyclists there are, the better/safer biking infrastructure becomes; Healthier citizens; Less space dedicated to car parking; and more.
+
+I'm an avid NYC cyclist who occasionally uses Citi Bike when I don't have access to my own bike. It's my perception that the Citi Bike's speed holds it back: The non-electric option seem too slow compared to normal bikes .<b>My project will evaluate Citi Bike data for 2022 to determine if the non-electric Citi Bike's speed could be improved to encourage more usage.</b> I'll compare trip data for the non-electric ("classic") Citi Bike, the electric Citi Bike, and Google Maps' bike estimates (based on the average bike) to test my hypothesis.
+
+
+#### 1.2 Research Questions and Hypothesis
+
+While I may not have full data and resources to perform a cost-benefit analysis on whether making the non-electric Citi Bike faster would drive more ridership, I could explore the below questions to determine whether a cost-benefit analysis <i>should be</i> performed by Citi Bike's owner Lyft.
+
+Research Questions <ol type="1">
+<li>How do electric and non-electric Citi Bike travel times compare to Google Maps' bike time estimates?</li>
+<li>Despite the higher price ($0.26 more/minute) does it appear that Citi Bike riders opt for the electric option when given the choice between the two?</li></ol>
+
+If the answers to the above two questions are: 1. Non-electric Citi Bike travel times are much longer than both Google Maps' estimates and the voltage-based option; 2. Citi Bike riders opt for the electric option by a large margin. Then I believe a cost-benefit analysis should be performed on whether making the non-electric bikes faster would increase profit.
+
+### Section 2.0 - Data
+
+My two different data sources are: <ol type="1">
+<li>*Citi Bike data* are available in CSV format per month from [its website](https://s3.amazonaws.com/tripdata/index.html). I can read each month of 2022's file using base R code and the utils package.</li>
+<li>*Google Maps bike trip time data* can be calculated using the Google Maps API, which plugs into the `gmapsdistance` R package. If I provide the start and end coordinates for two separate points, I can calculate estimated trip time. The Citi Bike data have start and end coordinates for each observation (ride). However there are millions of observations, therefore I'll compare bike travel time data for the most common trips, otherwise I'd run up a huge bill for the Google Maps API. In particular, I'll focus on the most common, *long* trips (10 min+) so the trip speed discrepancy can be more apparent.</li>
+
+To help me clean and transform my data, I'll use `dplyr`, `lubridate`, and `tidyr`, all from the Tidyverse. I won't load the entire Tidyverse so I can maximize available memory and minimize overlapping function names.
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(tidyr) 
+```
+
+#### 2.1 Data Reading
+
+##### Citibike Data
+
+Reading in Citi Bike data from its website.
+```{r}
+url_cb0122 <- "http://s3.amazonaws.com/tripdata/202201-citibike-tripdata.csv.zip"
+download.file(url_cb0122,"202201-citibike-tripdata.csv.zip")
+unzip("202201-citibike-tripdata.csv.zip")
+cb_0122 <- read.csv("202201-citibike-tripdata.csv",sep=",",header=T)
+
+url_cb0222 <- "http://s3.amazonaws.com/tripdata/202202-citibike-tripdata.csv.zip"
+download.file(url_cb0222,"202202-citibike-tripdata.csv.zip")
+unzip("202202-citibike-tripdata.csv.zip")
+cb_0222 <- read.csv("202202-citibike-tripdata.csv",sep=",",header=T)
+
+url_cb0322 <- "http://s3.amazonaws.com/tripdata/202203-citibike-tripdata.csv.zip"
+download.file(url_cb0322,"202203-citibike-tripdata.csv.zip")
+unzip("202203-citibike-tripdata.csv.zip")
+cb_0322 <- read.csv("202203-citibike-tripdata.csv",sep=",",header=T)
+
+url_cb0422 <- "http://s3.amazonaws.com/tripdata/202204-citibike-tripdata.csv.zip"
+download.file(url_cb0422,"202204-citibike-tripdata.csv.zip")
+unzip("202204-citibike-tripdata.csv.zip")
+cb_0422 <- read.csv("202204-citibike-tripdata.csv",sep=",",header=T)
+
+url_cb0522 <- "http://s3.amazonaws.com/tripdata/202205-citibike-tripdata.csv.zip"
+download.file(url_cb0522,"202205-citibike-tripdata.csv.zip")
+unzip("202205-citibike-tripdata.csv.zip")
+cb_0522 <- read.csv("202205-citibike-tripdata.csv",sep=",",header=T)
+
+# Note: June 2022 file download corrupted so I had to manually download and read locally.
+# I understand this is not scalable; I tried for multiple hours to fix this one file without luck.
+# For the sake of finishing this project on time, and because I felt I demonstrated
+# how I would typically perform this download with the other files,
+# I needed to take this one shortcut, apologies!
+cb_0622 <- read.csv("C:\\Users\\rossboehme\\Downloads\\202206-citbike-tripdata.csv")
+
+url_cb0722 <- "http://s3.amazonaws.com/tripdata/202207-citbike-tripdata.csv.zip"
+download.file(url_cb0722,"202207-citbike-tripdata.csv.zip")
+unzip("202207-citbike-tripdata.csv.zip")
+cb_0722 <- read.csv("202207-citbike-tripdata.csv",sep=",",header=T)
+
+url_cb0822 <- "https://s3.amazonaws.com/tripdata/202208-citibike-tripdata.csv.zip"
+download.file(url_cb0822,"202208-citibike-tripdata.csv.zip")
+unzip("202208-citibike-tripdata.csv.zip")
+cb_0822 <- read.csv("202208-citibike-tripdata.csv",sep=",",header=T)
+
+url_cb0922 <- "http://s3.amazonaws.com/tripdata/202209-citibike-tripdata.csv.zip"
+download.file(url_cb0922,"202209-citibike-tripdata.csv.zip")
+unzip("202209-citibike-tripdata.csv.zip")
+cb_0922 <- read.csv("202209-citibike-tripdata.csv",sep=",",header=T)
+
+url_cb1022 <- "https://s3.amazonaws.com/tripdata/202210-citibike-tripdata.csv.zip"
+download.file(url_cb1022,"202210-citibike-tripdata.csv.zip")
+unzip("202210-citibike-tripdata.csv.zip")
+cb_1022 <- read.csv("202210-citibike-tripdata.csv",sep=",",header=T)
+
+url_cb1122 <- "https://s3.amazonaws.com/tripdata/202211-citibike-tripdata.csv.zip"
+download.file(url_cb1122,"202211-citibike-tripdata.csv.zip")
+unzip("202211-citibike-tripdata.csv.zip")
+cb_1122 <- read.csv("202211-citibike-tripdata.csv",sep=",",header=T)
+
+url_cb1222 <- "https://s3.amazonaws.com/tripdata/202212-citibike-tripdata.csv.zip"
+download.file(url_cb1222,"202212-citibike-tripdata.csv.zip")
+unzip("202212-citibike-tripdata.csv.zip")
+cb_1222 <- read.csv("202212-citibike-tripdata.csv",sep=",",header=T)
+
+```
+
+Binding the dataframes into one dataset. The full dataframe contains 30.7M rows. I'll remove the monthly dataframes from my environment to save space and simplify my R Studio environment.
+```{r}
+cb <- rbind(cb_0122,cb_0222,cb_0322,cb_0422,cb_0522,cb_0622,cb_0722,cb_0822,cb_0922,cb_1022,cb_1122,cb_1222)
+
+rm(list=ls(pattern="22"))
+```
+
+My Citi Bike dataframes contain 13 columns. [Definitions from Citi Bike site](https://citibikenyc.com/system-data) (owned by Lyft). <ol type="1">
+<li>"ride_id" - Unique ride ID</li>
+<li>"rideable_type" - Bike type: "electric", "classic" (non-electric), or "docked" (accidental unlocking and re-locking)</li>
+<li>"started_at" - Time and date ride started</li>
+<li>"ended_at" - Time and date ride ended</li>
+<li>"start_station_name" - Typically in the format of cross streets e.g. "7 Ave & Central Park South"</li>
+<li>"start_station_id" - 6 digit float giving unique ID to start station</li>
+<li>"end_station_name" - formatted the same as start station name</li>
+<li>"end_station_id" - 6 digit float giving unique ID to end station</li>
+<li>"start_lat" - Trip starting latitude at station</li>
+<li>"start_lng" - Trip starting longitude at station</li>
+<li>"end_lat" - Trip starting latitude at station</li>
+<li>"end_lng" - Trip starting longitude at station</li>
+<li>'member_casual" - Binary of whether trip was taken by Citi Bike subscriber "member" or non-member "casual"</li> </ol>
+
+
+###### Google Maps data
+My Google Maps data is best added to my RMD as it's simultaneously cleaned and transformed. Therefore I'll save this for section 2.3. The only Google Maps data I'll be bringing in will be trip time estimates based on starting and ending coordinates.
+
+#### 2.2 Data Cleaning
+
+##### Citi Bike Cleaning
+My Citi Bike data are relatively clean already. The only adjustments I'll make are 1. Removing "docked" Citi Bike trips (docking and immediate re-docking due to bike issues) and 2. Cleaning the station names.
+
+1. Removing "docked" trips
+
+```{r}
+cb <- cb %>%
+  filter(rideable_type != "docked_bike")
+```
+
+2. Removing forward slashes from the station names, and cleaning up missing spaces around ampersands. Example name changes: <ul>
+<li>W 34 St &\tHudson Blvd E" should be "W 34 St & Hudson Blvd E"</li>
+<li>"Forsyth St\t& Grand St" should be "Forsyth St & Grand St"</li><ul>
+
+```{r}
+cb$start_station_name <- gsub("\\s*&\\s*", " & ", cb$start_station_name)
+cb$end_station_name <- gsub("\\s*&\\s*", " & ", cb$end_station_name)
+
+cb$start_station_name <- gsub("\\t", "", cb$start_station_name)
+cb$end_station_name <- gsub("\\t", "", cb$end_station_name)
+```
+
+##### Google Maps Cleaning
+My Google Maps data is best added to my RMD as it's simultaneously cleaned and transformed. Therefore I'll save this for section 2.3.
+
+#### 2.3 Data Transformation
+
+##### Citibike Data and Google Maps Data Combined Transformation
+
+I'll assess the most common trips in cb which have a duration of 10 min+. I'll use these as the basis of comparison for the speed of: a) Manual Citi Bike, b) Electric Citi Bike, c) Typical bike using Google Maps biking estimate as proxy. I could use a shorter trip length but a longer trip is a larger sample size which can better display the difference in speeds.
+
+The most common 10+ min trips may actually cover short distances if bikers take indirect routes or are dawdling. Therefore I'll check the most common routes using Google Maps to make sure they're an adequately long distance before using them as a basis of comparison.
+
+```{r}
+library(gmapsdistance)
+#Calculating trip times
+cb$trip_time <- difftime(cb$ended_at, cb$started_at,units='mins')
+
+#Getting rid of "mins" string on trip_time vector
+cb$trip_time <- gsub( " .*$", "", cb$trip_time)
+
+#Combining coordinates from Citi Bike data so they can be plugged into Google Maps API
+cb$start_lat <- paste0(cb$start_lat,"+")
+cb$start_full_coord <- paste(cb$start_lat,cb$start_lng,sep="")
+cb$end_lat <- paste0(cb$end_lat,"+")
+cb$end_full_coord <- paste(cb$end_lat,cb$end_lng,sep="")
+
+#Looking at only trips which might fit my 10 min+ criteria and which aren't accidental undocking/redocking
+trip_count <- cb %>%
+  filter(start_station_id != end_station_id
+         ,trip_time >= 10)
+
+library(plyr)
+#Looking for the top trips
+trip_count <- ddply(trip_count,c('start_station_name','start_full_coord','start_station_id','end_station_name','end_full_coord','end_station_id'),nrow)
+
+#Detaching plyr so it doesn't affect my dplyr aggregate functions
+detach("package:plyr", unload=TRUE)
+
+top_trips <- trip_count %>%
+  arrange(desc(V1)) %>%
+  top_n(100)
+
+#Adding Google Maps estimates to top trips
+google_time <- c()
+for (i in 1:nrow(top_trips)){
+google_time[i] <- gmapsdistance(origin = top_trips$start_full_coord[i],
+                                            destination = top_trips$end_full_coord[i],
+                                            mode = "bicycling",key=Sys.getenv("GOOGLE_API"))$Time
+}
+
+#Converting Google Maps estimates from seconds to minutes
+trips_for_analysis <- top_trips %>%
+  mutate(google_time_mins = round(google_time/60,2))
+
+#Looking at only trips with a 10 min+ Google Maps bike trip estimate -- adequate length for comparison
+trips_for_analysis <- trips_for_analysis %>%  
+  filter(google_time_mins >= 10) %>%
+  arrange(desc(google_time_mins))
+```
+
+This leaves me with 8 potential trips for analysis.
+```{r}
+nrow(trips_for_analysis)
+```
+
+I'll now aggregate average trip times for these 8, grouped by electric and non-electric ("classic") bikes, to compare to Google Maps' estimates. First I need to prepare the data.
+
+```{r}
+#Creating unique trip ID by combining start and end station IDs
+trips_for_analysis <- transform(trips_for_analysis,start_end_id=paste0(start_station_id,end_station_id))
+cb <- transform(cb,start_end_id=paste0(start_station_id,end_station_id))
+
+#Filtering cb for only my top trips
+cb_top_trips <- filter(cb,start_end_id %in% trips_for_analysis$start_end_id)
+nrow(cb_top_trips)
+
+#Calculating *actual* trip times for targeted trips
+cb_top_trips$trip_time <- difftime(cb_top_trips$ended_at, cb_top_trips$started_at,units='mins')
+
+#Getting rid of "mins" string on trip_time vector
+cb_top_trips$trip_time <- gsub( " .*$", "", cb_top_trips$trip_time)
+
+#Converting trip_time back to numeric
+cb_top_trips <- cb_top_trips %>%
+  mutate_at(c('trip_time'), as.numeric)
+```
+
+The "average" actual trip times may be skewed by outliers. The Google Maps bike time estimate assumes a direct trip. However, Citi Bike users may be on a leisurely bike ride for fun. 
+
+To remove outliers, I'll perform the statistical analysis of leveraging upper and lower limits based on inter-quartile ranges (IQR). I'll do so per each "top trip"/bike type combination, grouping by start_end_id (unique top trip) and rideable_type (electric_bike, classic_bike).
+
+Overview of removing outliers formula below: <ol type='1'>
+<li>Find (Q1) and third (Q3) quartiles per group</li>
+<li>Calculate Q1 – 1.5 * IQR to find lower limit and Q3 + 1.5 * IQR to find upper limit for outliers</li></ol>
+
+```{r}
+library(dplyr)
+cb_top_trips_lower_outliers <- cb_top_trips %>%
+  group_by(rideable_type,start_end_id) %>%
+  summarise(lower_lim = fivenum(trip_time)[2] - 1.5 * (fivenum(trip_time)[4] - fivenum(trip_time)[2]))
+
+cb_top_trips_upper_outliers <- cb_top_trips %>%
+  group_by(rideable_type,start_end_id) %>%
+  summarise(upper_lim = fivenum(trip_time)[4] + 1.5 * (fivenum(trip_time)[4] - fivenum(trip_time)[2]))
+
+cb_top_trips_outliers <- merge(cb_top_trips_lower_outliers,cb_top_trips_upper_outliers)
+
+cb_top_trips_no_outliers <- cb_top_trips %>%
+  left_join(cb_top_trips_outliers, by=c("rideable_type","start_end_id"))
+
+#24,976 rows before outliers removed
+nrow(cb_top_trips_no_outliers)
+
+cb_top_trips_no_outliers <- cb_top_trips_no_outliers %>%
+  filter(upper_lim > trip_time, trip_time > lower_lim)
+
+#23,318 rows after outliers removed 
+nrow(cb_top_trips_no_outliers)
+```
+
+Now that outliers have been accounted for, I'll aggregate biking times per bike type and trip.
+```{r}
+cb_top_trips_clean <- cb_top_trips_no_outliers %>%
+  group_by(rideable_type,start_end_id) %>%
+  summarise(avg_trip_time = mean(trip_time))
+
+#Separating actual trip times into two separate dataframes, so they can be merged with trips_for_analysis
+cb_top_electric <- cb_top_trips_clean %>%
+  filter(rideable_type == 'electric_bike')
+
+cb_top_electric <- subset(cb_top_electric, select = -c(rideable_type))
+names(cb_top_electric) <- c('start_end_id','avg_trip_time_electric')
+  
+cb_top_classic <- cb_top_trips_clean %>%
+  filter(rideable_type == 'classic_bike')
+
+cb_top_classic <- subset(cb_top_classic, select = -c(rideable_type))
+names(cb_top_classic) <- c('start_end_id','avg_trip_time_classic')
+
+#Merging to compare with Google Maps estimates
+trips_compare1 <- merge(trips_for_analysis,cb_top_classic)
+trips_compare2 <- merge(trips_compare1,cb_top_electric)
+
+#Cleaning up comparison df
+trips_compared <- trips_compare2 %>%
+  separate_wider_delim(start_full_coord, "-", names = c("start_lat", "start_lng")) %>%
+  separate_wider_delim(end_full_coord, "-", names = c("end_lat", "end_lng")) %>%
+  mutate(start_lng = paste0("-", start_lng),
+         end_lng = paste0("-", start_lng),
+         trip_route = paste0(start_station_name," to ",end_station_name)) %>%
+  select(-c('V1'))
+```
+
+My final bike trip speed comparison df is 8 rows long, one for each "top trip" printed below. It includes average trip times (with outliers removed) for Google Maps' estimate, the classic Citi Bike, and the electric Citi Bike. In addition it includes starting/ending station names and starting/ending coordinates.
+```{r}
+trips_compared
+```
+
+### Section 3.0 - Exploratory Data Analysis
+
+Showing quantity of bike rides per month per bike type. Rides peaked in August at more than 3.5M rides, or more than 100K/day. Trips appeared to be correlated with the temperature as Jan and Feb, the coldest months, saw the fewest rides (between 1 to 1.25M). As an avid bike rider, my domain knowledge backs this up. Cold weather accentuates the wind effect created by biking, making me less likely to ride. 
+
+In addition, it appears that the number of electric bike trips as a % of total trips was highest in the coldest months, when there were the fewest riders. If electric bikes are more scarce, this could back up my hypothesis that riders opt for the voltage-based option over the classic option if both are available. I'll explore this more fully in section 4 when I answer my research questions. 
+
+```{r}
+library(ggplot2)
+cb_rides_per_month <- cb %>%
+  group_by(rideable_type,lubridate::month(started_at,label=T)) %>%
+  filter(rideable_type %in% c('classic_bike','electric_bike')) %>%
+  count(rideable_type)
+
+names(cb_rides_per_month) <- c('rideable_type','ride_month','rides')
+
+# Stacked
+ggplot(data=cb_rides_per_month, aes(fill=rideable_type, y=rides, x=ride_month)) + 
+  geom_bar(position="stack", stat="identity") +
+  xlab("Month") +
+  ylab("Number of Rides")  +
+  ggtitle("Citi Bike Rides Per Bike Type Per Month - 2022") + 
+  guides(fill=guide_legend(title="Bike Type")) +
+  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) # millions
+```
+
+Showing type of rider per day of the week. Tuesday through Friday are the most popular days to ride, especially among members (subscription holders). 
+
+Citi Bike members account for roughly 3/4 of all trips.
+
+```{r}
+cb_rider_type_per_DOW <- cb %>%
+  group_by(member_casual,lubridate::wday(started_at,label=T,abbr=T)) %>%
+  filter(rideable_type %in% c('classic_bike','electric_bike')) %>%
+  count(member_casual)
+
+names(cb_rider_type_per_DOW) <- c('rider_type','day_of_week','rides')
+
+ggplot(data=cb_rider_type_per_DOW, aes(fill=rider_type, y=rides, x=day_of_week)) + 
+  geom_bar(position="stack", stat="identity") +
+  xlab("Day of Week") +
+  ylab("Number of Rides")  +
+  ggtitle("Citi Bike Rides Per Day of Week, Rider Type - 2022") + 
+  guides(fill=guide_legend(title="Rider Type")) +
+  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6)) # millions
+```
+
+### Section 4.0 - Research Question Analysis
+
+To repeat my primary research questions: <ol type='1'>
+<li>How do electric and non-electric Citi Bike travel times compare to Google Maps' bike time estimates?</li>
+<li>Despite the higher price ($0.26 more/minute) does it appear that Citi Bike riders opt for the electric option when given the choice between the two?</li></ol>
+
+I'll answer the first question by assessing my `trips_compared` dataframe created in section 2.3.
+
+```{r}
+#Pivoting longer to chart time comparisons
+trip_compare_long <- trips_compared %>%
+  select('google_time_mins','avg_trip_time_classic','avg_trip_time_electric','trip_route')
+
+names(trip_compare_long) <- c('Google Estimate','Classic Citi Bike', 'Electric Citi Bike', 'trip_route')
+
+trip_compare_long <-  trip_compare_long %>%
+  pivot_longer(cols=c('Google Estimate','Classic Citi Bike','Electric Citi Bike'),
+               names_to='trip_type',
+               values_to='trip_time') %>%
+  select(c('trip_route','trip_type','trip_time'))
+
+#Wrapper for title
+wrapper <- function(x, ...) 
+{
+  paste(strwrap(x, ...), collapse = "\n")
+}
+
+ggplot(trip_compare_long,                                      
+       aes(x = trip_route,
+           y = trip_time,
+           fill = trip_type)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  coord_flip() + 
+  xlab("Trip Route") +
+  ylab("Avg Trip Time (mins)")  +
+  ggtitle(wrapper("Avg Trip Time by Biking Option: 8 Most Common Long NYC Routes",width=25)) +
+  guides(fill=guide_legend(title="Biking Option"))
+```
+
+
+Per the above chart it appears that for four of the trips, both the classic and electric Citi Bike options take substantially longer (more than 1.3x) than the Google estimate. Upon further inspection of the station names using my NYC knowledge, 2 of these 4 trips involve a trip through Central Park ("Central Park S & 6 Ave to Central Park North & Adam...", "Central Park S & 6 Ave to 5 Ave & E 87 St") while the other two go along Hudson River Park ("10 Ave & W 14th St to West St & Liberty St", "12 Ave & W 40 St to Pier 40...").
+
+This knowledge, combined with their difference in distribution to the other charts, makes me believe their average is skewed by leisurely journeys through their parks. Therefore, I will drop them from this model as I don't believe they provide an accurate comparison. 
+
+```{r}
+#Dropping trips where the average duration for the electric Citi Bike was 1.3x+ longer than the Google Maps estimate #All of these involve trips through Central Park
+trip_compare_final <- trips_compared %>%
+  select('google_time_mins','avg_trip_time_classic','avg_trip_time_electric','trip_route') %>%
+  filter(avg_trip_time_electric < (google_time_mins * 1.3))
+
+names(trip_compare_final) <- c('Google Estimate','Classic Citi Bike', 'Electric Citi Bike', 'trip_route')
+
+trip_compare_final <-  trip_compare_final %>%
+  pivot_longer(cols=c('Google Estimate','Classic Citi Bike','Electric Citi Bike'),
+               names_to='trip_type',
+               values_to='trip_time') %>%
+  select(c('trip_route','trip_type','trip_time'))
+
+#Wrapper for title
+wrapper <- function(x, ...) 
+{
+  paste(strwrap(x, ...), collapse = "\n")
+}
+
+ggplot(trip_compare_final,                                      
+       aes(x = trip_route,
+           y = trip_time,
+           fill = trip_type)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  coord_flip() + 
+  xlab("Trip Route") +
+  ylab("Avg Trip Time (mins)")  +
+  ggtitle(wrapper("Avg Trip Time by Biking Option: 4 Most Common Long, Non-Leisurely NYC Routes",width=40)) + 
+  guides(fill=guide_legend(title="Biking Option"))
+```
+
+
+The above chart displays that the Classic Citi Bike is by far the slowest option for these common trips. I quantify just how much slower it is in the below R chunk using statistics. In written terms:<ul>
+<li>On average, electric Citi Bike trips were 8% slower than Google Maps trip estimates for the 5 most common, non-leisurely NYC route</li>
+<li>On average, classic Citi Bike trips were 34% slower than Google Maps trip estimates for the 5 most common, non-leisurely NYC routes</li>
+<li>On average, Classic Citi Bike trips were 23% slower than electric Citi Bike trips for the 5 most common, non-leisurely NYC routes.</li></ul>
+
+```{r}
+trip_compare_stats <- trips_compared %>%
+  select('google_time_mins','avg_trip_time_classic','avg_trip_time_electric','trip_route') %>%
+  filter(avg_trip_time_electric < (google_time_mins * 1.3)) %>%
+  mutate(google_to_electric_ratio = avg_trip_time_electric / google_time_mins,
+         google_to_classic_ratio = avg_trip_time_classic / google_time_mins,
+         electric_to_classic_ratio = avg_trip_time_classic / avg_trip_time_electric)
+
+trip_compare_stats %>% summarise(mean(google_to_electric_ratio))
+
+trip_compare_stats %>% summarise(mean(google_to_classic_ratio))
+
+trip_compare_stats %>% summarise(mean(electric_to_classic_ratio))
+```
+
+Now that I've established classic Citi Bikes as substantially slower than Google Maps time estimates and electric Citi Bikes, I'll assess my second research question: <i>Despite the higher price ($0.26 more/minute) does it appear that Citi Bike riders opt for the electric option when given the choice between the two?</i>
+
+The next chart shows electric vs. classic bikes as a % of total Citi Bike trips in 2022. In the earliest months of the year, Citi Bike trips took up a notably higher proportion than later in the year. That was likely because in April 2022, Citi Bike increased their electric fleet from 5.000 to 6,500 with the launch of new e-bike, increasing the [total number of Citi Bikes from 24,500 to 26,000](https://www.bicycling.com/news/a39945527/citi-bike-new-e-bike-nyc-bikeshare/).
+
+Interestingly, while absolute usage of electric e-bikes generally increased, as a % it actually decreased, meaning perhaps the voltage-based option reached interest saturation. That said, [Lyft's latest yearly report on Citi Bike](https://drive.google.com/file/d/1bjtmtM48e9_Hpw4RLFAHCjN19SoXb5s7/view) claimed that even though e-bikes accounted for 1/5th of the fleet, they accounted for 1/3 of rides. The report also detailed how electric Citi Bikes were used three times more often per day in 2021 compared to "classics." Therefore, my dataset may be skewed by a higher-than-usual number of electric bikes being out of service towards the end of the year. Overall, it still seems true that riders prefer the e-Citi Bike.
+
+```{r}
+library(reshape)
+library(scales)
+wide_rides <- cb_rides_per_month %>%
+  pivot_wider(names_from=rideable_type,values_from=rides)
+
+wide_rides <- data.frame(wide_rides)
+
+wide_melt <- melt(wide_rides, id.vars = 'ride_month')
+
+ggplot(wide_melt,aes(x = ride_month, y = value,fill = variable)) + 
+  geom_bar(position = "fill",stat = "identity") + 
+  scale_y_continuous(labels = scales::percent_format()) + 
+  xlab("Month") +
+  ylab("% of Rides")  +
+  ggtitle("Citi Bike Rides Per Bike Type as % of All Rides - 2022") + 
+  guides(fill=guide_legend(title="Rider Type"))
+```
+
+
+This chart shows bike type usage broken down by member (Citi Bike subscriber) vs. non-member. Members prefer the electric bike by a 3:1 margin. If members are more profitable than "casuals", they should be a priority, and they may prefer the electric bike for its speed. 
+
+```{r}
+rider_bike_preference <- cb %>%
+  group_by(member_casual,rideable_type) %>%
+  filter(rideable_type %in% c('classic_bike','electric_bike')) %>%
+  count(member_casual)
+
+names(rider_bike_preference) <- c('rider_type','bike_type','rides')
+
+ggplot(data=rider_bike_preference, aes(fill=rider_type, y=rides, x=bike_type)) + 
+  geom_bar(position="stack", stat="identity") +
+  xlab("Bike Type") +
+  ylab("Number of Rides")  +
+  ggtitle("Citi Bike Rides Per Bike and Rider Type - 2022") + 
+  guides(fill=guide_legend(title="Rider Type")) +
+  scale_y_continuous(labels = scales::label_number(suffix = " M", scale = 1e-6))
+```
+
+Based on the above analysis, the data suggest that: <ol>
+<li>Classic Citi bikes are much slower (-42%) than a typical bike (using Google Maps time estimates as a proxy). They're also much slower than an electric Citi Bike (-24%).</li>
+<li>When users have the option to choose between the electric and classic Citi Bikes, they typically choose the former, even though they're more expensive to use. Citi Bike subscribers/members especially have this preference.</li></ol>
+
+Therefore yes, a cost-benefit analysis should likely be performed on whether making the classic Citi bikes faster would increase profit. This analysis could involve:<ul>
+<li>Surveying Citi Bike users for if/why they prefer the electric bike option (is it the speed, the ease of pedaling, or something else?)</li>
+<li>Assessing cost of replacing/upgrading classic bike fleet over time (as current manual bikes break). Example improvements could include reducing the classic bike's weight ([currently 45lbs](https://gothamist.com/news/we-test-drove-citi-bike-and-came-back-with-some-tips-for-you), changing the frame (from a cruiser style to something more upright), and making the tires thinner.</li>
+<li>Organizing a focus group of users who said they thought "classic" bike was too slow, and having them test new bike options.</li>
+<li>Assessing how much the Citi Bike fare would need to be raised to fund an upgrade of the classic fleet.</li>
+
+A skeptic of my proposal may suggest that instead of making the classic Citi Bike faster, instead Lyft should replace all the classic Citi Bikes with electric bikes. But electric bikes are much more expensive to produce ([2-3x on average](https://www.consumerreports.org/health/electric-bikes/is-an-e-bike-right-for-you-electric-bike-buying-guide-a2136838953/#:~:text=Prices%20for%20e%2Dbikes%20range,a%20conventional%20midrange%20commuter%20bicycle.)), [less reliable due to having more parts](https://www.consumerreports.org/health/electric-bikes/is-an-e-bike-right-for-you-electric-bike-buying-guide-a2136838953/#:~:text=Prices%20for%20e%2Dbikes%20range,a%20conventional%20midrange%20commuter%20bicycle.), [are not as rigorous of a workout](https://www.nytimes.com/2021/05/19/well/move/bikes-exercise-workouts.html), and may be unsettling to those not experienced with pedal-assisted energy. Therefore, based on my findings in this analysis and my own experience, *a faster non-electric Citi Bike would be a more profitable product long-term than the current non-electric option*. 
+
+
+### Section 5.0 - Conclusions
+
+<ul>
+<li>The classic, non-electric Citi Bike appears to suffer in popularity because it's slower than the typical bike (using Google Maps estimates as a proxy) and the electric Citi Bike.</li>
+<li>When analyzing 4 of the most common, non-leisurely Citi Bike routes in NYC for 2022, the classic Citi Bike was 34% slower than the Google Maps estimate, and 23% slower than the electric Citi bike.</li>
+<li>While I was unable to find a trend in my 2022 data which proved that casual riders prefer the electric over the traditional Citi Bike, a) Lyft had its own data over a longer time horizon which said as much. Lyft claims that the typical electric bike is used 3x more often than the typical classic bike (in part because there are fewer electrics). In addition: b) In my data, Citi Bike members chose electric bikes over classic bikes at a 3 to 1 ratio. Members have more informed opinions as repeat customers and may be more profitable customers who Lyft should prioritize.</li>
+
+<li>The classic bike could easily be made faster by: 1) Reducing the weight from its current 45 lbs; 2) Changing the frame; 3) Making the tires less wide.</li>
+<li>Therefore Lyft should carry out a more comprehensive cost-benefit analysis to determine if the current classic Citi Bike model should be phased out in favor of a faster option. Lyft's analysis could include cost estimates for changing the bike and whether increasing fairs could make up for those costs</li></ul>
+
+#### 5.1 - Limitations
+<ul><li>2022 data may not be representative of all Citi Bike trips. The city's infrastructure, such as bike lanes, are constantly changing and Google Maps may have outdated trip time estimates.</li>
+<li>Lyft may prefer a slower Citi Bike because it's less dangerous. However the fact that the company has increasingly introduced e-bikes to their fleet means speed is not a primary worry.</li>
+</ol>
+
+### Works Cited
+Section 2<ul>
+<li>Citi Bike data including definitions for each fields are available on [their website](https://citibikenyc.com/system-data)</li>
+<li>The Google Maps API for r was created by Michael Dorman. [Documentation here](https://cran.rstudio.com/web/packages/mapsapi/vignettes/intro.html).</li></ul>
+
+Section 4<ul>
+<li>[Bicycling.com: Total Number of Citi Bikes](https://www.bicycling.com/news/a39945527/citi-bike-new-e-bike-nyc-bikeshare/)</li>
+<li>[Lyft: 2022 Citi Bike Multimodal report](https://drive.google.com/file/d/1bjtmtM48e9_Hpw4RLFAHCjN19SoXb5s7/view) for statistics on the Citi Bike fleet</li>
+<li>[Consumer Reports: Electric bikes are much more expensive to produce and less  reliable](https://www.consumerreports.org/health/electric-bikes/is-an-e-bike-right-for-you-electric-bike-buying-guide-a2136838953/#:~:text=Prices%20for%20e%2Dbikes%20range,a%20conventional%20midrange%20commuter%20bicycle.))</li>
+<li>[NY Times: Electric bikes are not as intensive of a  workout](https://www.nytimes.com/2021/05/19/well/move/bikes-exercise-workouts.html)</li>
+<li>[Gothamist: Citi Bike's Weight](https://gothamist.com/news/we-test-drove-citi-bike-and-came-back-with-some-tips-for-you)</li>
